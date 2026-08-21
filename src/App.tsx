@@ -743,7 +743,9 @@ function App({ onLogout }: { onLogout: () => void }) {
           ? base.title
           : `編輯${base.title.replace("新增", "").replace("建立", "")}`,
       submitLabel: editId === undefined ? "儲存" : "更新",
-      fields: base.fields.map((field) => ({
+      fields: (formKind === "event"
+        ? [...base.fields, { name: "recurrenceEnd", label: "重複到哪一天", type: "date" as const, required: true, visibleWhen: (formValues: Record<string, string>) => formValues.recurrence !== "無" }]
+        : base.fields).map((field) => ({
         ...field,
         defaultValue: values?.[field.name] ?? field.defaultValue,
       })),
@@ -1123,6 +1125,7 @@ function App({ onLogout }: { onLogout: () => void }) {
             end: values.end,
             category: values.category,
             recurrence: values.recurrence as CalendarEvent["recurrence"],
+            recurrenceEnd: values.recurrence === "無" ? undefined : values.recurrenceEnd,
             note: values.note,
           },
         ]);
@@ -1585,6 +1588,11 @@ function App({ onLogout }: { onLogout: () => void }) {
               setPreset(minutes);
               navigate("專注");
             }}
+            onAddTask={(course, title) => {
+              setTasks((current) => [{id:Date.now(),title,done:false,quadrant:"Q2",estimate:30,project:course,category:"學習",energy:"中",status:"待辦"},...current]);
+              notify(`已加入「${course}」任務`);
+            }}
+            onAddExam={() => setFormKind("exam")}
             onOpenExams={() => navigate("考試")}
           />
         </>
