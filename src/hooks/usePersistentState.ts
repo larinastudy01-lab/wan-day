@@ -13,6 +13,8 @@ export function usePersistentState<T>(key:string,fallback:T):[T,Dispatch<SetStat
   const [value,setValue]=useState<T>(()=>initialValue(scope,key,fallback))
   const cloudReady=useRef(!scope)
   const initialLocalValue=useRef(value)
+  const latestValue=useRef(value)
+  useEffect(()=>{latestValue.current=value},[value])
 
   useEffect(()=>writeLocal(storageKey,value),[storageKey,value])
 
@@ -20,13 +22,15 @@ export function usePersistentState<T>(key:string,fallback:T):[T,Dispatch<SetStat
     if(!scope){cloudReady.current=true;return}
     let cancelled=false
     cloudReady.current=false
+    window.dispatchEvent(new CustomEvent('wanday-sync',{detail:{status:'syncing'}}))
     readCloud<T>(scope,key)
       .then(remote=>{
         if(cancelled)return
         if(remote.found)setValue(remote.value as T)
         else return writeCloud(scope,key,initialLocalValue.current)
       })
-      .catch(error=>console.error(`Unable to load ${key} from Supabase`,error))
+      .then(()=>{if(!cancelled)window.dispatchEvent(new CustomEvent('wanday-sync',{detail:{status:'synced',at:Date.now()}}))})
+      .catch(error=>{console.error(`Unable to load ${key} from Supabase`,error);window.dispatchEvent(new CustomEvent('wanday-sync',{detail:{status:'error'}}))})
       .finally(()=>{if(!cancelled)cloudReady.current=true})
     return()=>{cancelled=true}
   },[scope,key])
@@ -34,10 +38,13 @@ export function usePersistentState<T>(key:string,fallback:T):[T,Dispatch<SetStat
   useEffect(()=>{
     if(!scope||!cloudReady.current)return
     const timer=window.setTimeout(()=>{
-      writeCloud(scope,key,value).catch(error=>console.error(`Unable to persist ${key} to Supabase`,error))
+      window.dispatchEvent(new CustomEvent('wanday-sync',{detail:{status:'syncing'}}))
+      writeCloud(scope,key,value).then(()=>window.dispatchEvent(new CustomEvent('wanday-sync',{detail:{status:'synced',at:Date.now()}}))).catch(error=>{console.error(`Unable to persist ${key} to Supabase`,error);window.dispatchEvent(new CustomEvent('wanday-sync',{detail:{status:'error'}}))})
     },300)
     return()=>window.clearTimeout(timer)
   },[scope,key,value])
+
+  useEffect(()=>{if(!scope)return;const retry=()=>{window.dispatchEvent(new CustomEvent('wanday-sync',{detail:{status:'syncing'}}));writeCloud(scope,key,latestValue.current).then(()=>window.dispatchEvent(new CustomEvent('wanday-sync',{detail:{status:'synced',at:Date.now()}}))).catch(()=>window.dispatchEvent(new CustomEvent('wanday-sync',{detail:{status:'error'}})))};window.addEventListener('online',retry);return()=>window.removeEventListener('online',retry)},[scope,key])
 
   return [value,setValue]
 }

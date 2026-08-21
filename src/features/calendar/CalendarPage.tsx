@@ -3,6 +3,7 @@ import {ChevronLeft,ChevronRight} from 'lucide-react'
 import type {CalendarEvent,Health,Project,Task} from '../../domain/types'
 import {CapacityPage} from '../capacity/CapacityPage'
 import {occursOn} from '../../lib/calendar'
+import {scheduleConflicts} from '../../lib/schedule'
 
 const dayMs=86_400_000
 const isoDate=(date:Date)=>{
@@ -34,9 +35,9 @@ export function CalendarPage({tasks,setTasks,events,setEvents,onUndo,projects=[]
   const eventsOn=(date:Date)=>events.filter(event=>occursOn(event.date,event.recurrence,isoDate(date),event.recurrenceEnd,event.endDate))
   const tasksOn=(date:Date)=>tasks.filter(task=>task.due===isoDate(date)||(task.due==='今天'&&sameDay(date,today)))
   const shift=(direction:number)=>setAnchor(current=>{const next=new Date(current);if(view==='月')next.setMonth(next.getMonth()+direction);else next.setDate(next.getDate()+direction*(view==='週'?7:1));return next})
-  const drop=(date:Date)=>{if(!dragId)return;setTasks(current=>current.map(task=>task.id===dragId?{...task,due:isoDate(date)}:task));setDragId(undefined)}
+  const drop=(date:Date)=>{if(!dragId)return;const nextDate=isoDate(date);setTasks(current=>current.map(task=>task.id===dragId?{...task,due:nextDate}:task));setEvents(current=>current.map(event=>event.sourceType==='task'&&event.sourceId===dragId?{...event,date:nextDate,endDate:nextDate}:event));setDragId(undefined)}
   const removeEvent=(item:CalendarEvent)=>{if(!window.confirm(`確定刪除事件「${item.title}」？`))return;setEvents(current=>current.filter(event=>event.id!==item.id));onUndo(item)}
-  const eventChip=(event:CalendarEvent)=><span className={`cal-event category-${event.category}`} key={event.id}><strong>{event.start}</strong> {event.title}{event.recurrence!=='無'&&<em>{event.recurrence}{event.recurrenceEnd?`・到 ${event.recurrenceEnd.slice(5)}`:''}</em>}<button aria-label={`刪除 ${event.title}`} onClick={()=>removeEvent(event)}>×</button></span>
+  const eventChip=(event:CalendarEvent)=>{const conflict=scheduleConflicts(event,events,event.id).length>0;return <span className={`cal-event category-${event.category}${event.completed?' completed':''}${conflict?' conflict':''}`} title={conflict?'這段時間與其他行程重疊':''} key={event.id}><strong>{event.start}</strong> {event.title}{conflict&&<em>時間重疊</em>}{event.recurrence!=='無'&&<em>{event.recurrence}{event.recurrenceEnd?`・到 ${event.recurrenceEnd.slice(5)}`:''}</em>}<button aria-label={`刪除 ${event.title}`} onClick={()=>removeEvent(event)}>×</button></span>}
   const taskChip=(task:Task)=><span draggable onDragStart={()=>setDragId(task.id)} className="cal-event task-event" key={task.id}>{task.title}</span>
   const title=view==='月'?dateLabel(anchor,{year:'numeric',month:'long'}):view==='日'?dateLabel(anchor,{year:'numeric',month:'long',day:'numeric'}):`${dateLabel(weekDays[0],{month:'numeric',day:'numeric'})}－${dateLabel(weekDays[6],{month:'numeric',day:'numeric'})}`
 

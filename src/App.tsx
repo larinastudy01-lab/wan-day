@@ -97,6 +97,7 @@ import { SmartInsightCard } from "./features/insights/SmartInsightCard";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useStorageScope } from "./hooks/storageScopeContext";
 import { playCompletionTone } from "./lib/audio";
+import { nearestOpenStart, scheduleConflicts } from "./lib/schedule";
 import { PageTitle } from "./components/PageTitle";
 import { MascotCompanion, MascotGallery } from "./components/MascotCompanion";
 import { mascotForPage } from "./config/mascots";
@@ -170,15 +171,15 @@ function App({ onLogout }: { onLogout: () => void }) {
   const storageScope = useStorageScope();
   const [tasks, setTasks] = usePersistentState<Task[]>(
     "growth-tasks-v2",
-    initialTasks,
+    storageScope ? [] : initialTasks,
   );
   const [goals, setGoals] = usePersistentState<Goal[]>(
     "growth-goals-v2",
-    initialGoals,
+    storageScope ? [] : initialGoals,
   );
   const [projects, setProjects] = usePersistentState<Project[]>(
     "growth-projects-v1",
-    initialProjects,
+    storageScope ? [] : initialProjects,
   );
   const [habits, setHabits] = usePersistentState<Habit[]>(
     "growth-habits-v1",
@@ -202,7 +203,7 @@ function App({ onLogout }: { onLogout: () => void }) {
   });
   const [works, setWorks] = usePersistentState<WorkProfile[]>(
     "growth-works-v1",
-    initialWorks,
+    storageScope ? [] : initialWorks,
   );
   const [workLogs, setWorkLogs] = usePersistentState<WorkLog[]>(
     "growth-worklogs-v1",
@@ -293,11 +294,11 @@ function App({ onLogout }: { onLogout: () => void }) {
   );
   const [events, setEvents] = usePersistentState<CalendarEvent[]>(
     "growth-events-v1",
-    initialEvents,
+    storageScope ? [] : initialEvents,
   );
   const [courses, setCourses] = usePersistentState<Course[]>(
     "growth-courses-v1",
-    initialCourses,
+    storageScope ? [] : initialCourses,
   );
   const [taskCategories, setTaskCategories] = usePersistentState<string[]>(
     "growth-task-categories-v1",
@@ -315,6 +316,7 @@ function App({ onLogout }: { onLogout: () => void }) {
     "light",
   );
   const [online, setOnline] = useState(() => navigator.onLine);
+  const [syncState,setSyncState]=useState<{status:'syncing'|'synced'|'error';at?:number}>({status:'synced'});
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent>();
   const [focusSeconds, setFocusSeconds] = useState(25 * 60);
   const [focusRunning, setFocusRunning] = useState(false);
@@ -474,6 +476,7 @@ function App({ onLogout }: { onLogout: () => void }) {
     addEventListener("keydown", fn);
     return () => removeEventListener("keydown", fn);
   }, []);
+  useEffect(()=>{const receive=(event:Event)=>setSyncState((event as CustomEvent).detail);window.addEventListener('wanday-sync',receive);return()=>window.removeEventListener('wanday-sync',receive)},[]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
@@ -518,8 +521,11 @@ function App({ onLogout }: { onLogout: () => void }) {
   const top = open
     .filter((t) => t.quadrant === "Q1" || t.quadrant === "Q2")
     .slice(0, 3);
-  const toggle = (id: number) =>
-    setTasks((v) => v.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const toggle = (id: number) => {
+    const nextDone=!tasks.find(task=>task.id===id)?.done;
+    setTasks((v) => v.map((t) => (t.id === id ? { ...t, done: nextDone,status:nextDone?"完成":t.status==="完成"?"待辦":t.status } : t)));
+    setEvents(current=>current.map(event=>event.sourceType==="task"&&event.sourceId===id?{...event,completed:nextDone}:event));
+  };
   const remove = (id: number) => {
     const item = tasks.find((x) => x.id === id);
     if (!item || !window.confirm(`確定刪除「${item.title}」？`)) return;
@@ -729,6 +735,8 @@ function App({ onLogout }: { onLogout: () => void }) {
           ? projects.find((x) => x.id === editId)
           : formKind === "work"
             ? works.find((x) => x.id === editId)
+            : formKind === "course"
+              ? courses.find((x) => x.id === editId)
             : formKind === "exam"
               ? exams.find((x) => x.id === editId)
               : formKind === "account"
@@ -782,6 +790,10 @@ function App({ onLogout }: { onLogout: () => void }) {
         const item = works.find((x) => x.id === editId);
         if (item) deleteRecord(item, setWorks, "工作");
       },
+      course: () => {
+        const item=courses.find((x)=>x.id===editId);
+        if(item){setCourses(current=>current.filter(course=>course.id!==item.id));setEvents(current=>current.filter(event=>!(event.sourceType==="course"&&event.sourceId===item.id)));notify("課程與對應行程已刪除")}
+      },
       exam: () => {
         const item = exams.find((x) => x.id === editId);
         if (item) deleteRecord(item, setExams, "考試");
@@ -814,6 +826,7 @@ function App({ onLogout }: { onLogout: () => void }) {
   };
   const createRecord = (values: Record<string, string>) => {
     const id = Date.now();
+    let resultMessage="";
     const num = (key: string) => Number(values[key]) || 0;
     switch (formKind) {
       case "goal": {
@@ -1147,26 +1160,28 @@ function App({ onLogout }: { onLogout: () => void }) {
           ...v,
         ]);
         break;
-      case "event":
-        setEvents((v) => [
-          ...v,
-          {
+      case "event": {
+        const item:CalendarEvent={
             id,
             title: values.title,
             date: values.date,
+            endDate: values.endDate||values.date,
             start: values.start,
             end: values.end,
             category: values.category,
             recurrence: values.recurrence as CalendarEvent["recurrence"],
             recurrenceEnd: values.recurrence === "無" ? undefined : values.recurrenceEnd,
             note: values.note,
-          },
-        ]);
+          };
+        const conflicts=scheduleConflicts(item,events);
+        setEvents((v) => [...v,item]);
+        if(conflicts.length){const opening=nearestOpenStart(item,events);resultMessage=`已保留行程，但與「${conflicts[0].title}」重疊${opening?`；附近可改到 ${opening}`:""}`}
         break;
+      }
     }
     setFormKind(null);
     setEditId(undefined);
-    notify(editId === undefined ? "新紀錄已儲存" : "變更已更新");
+    notify(resultMessage||(editId === undefined ? "新紀錄已儲存" : "變更已更新"));
   };
 
   const dashboard = (
@@ -1636,6 +1651,7 @@ function App({ onLogout }: { onLogout: () => void }) {
               navigate("專注");
             }}
             onAddCourse={() => setFormKind("course")}
+            onEditCourse={(course)=>openEdit("course",course.id)}
             onDeleteCourse={(course) => {
               if (!window.confirm(`確定刪除課程「${course.name}」？`)) return;
               setCourses((current) => current.filter((item) => item.id !== course.id));
@@ -2967,6 +2983,7 @@ function App({ onLogout }: { onLogout: () => void }) {
           >
             <TimerReset size={19} />
           </button>
+          <span className={`sync-state ${syncState.status}`} title={syncState.at?`最後同步 ${new Date(syncState.at).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}`:''}>{syncState.status==='syncing'?'同步中…':syncState.status==='error'?'同步失敗':'已同步'}</span>
           <button
             className="mini-avatar"
             onClick={() => navigate("個人設定")}
@@ -3074,6 +3091,7 @@ function App({ onLogout }: { onLogout: () => void }) {
                   task.id === updated.id ? updated : task,
                 ),
               );
+              if(updated.due&&updated.scheduledStart&&updated.scheduledEnd){const date=updated.due,start=updated.scheduledStart,end=updated.scheduledEnd;setEvents(current=>[...current.filter(event=>!(event.sourceType==="task"&&event.sourceId===updated.id)),{id:Date.now(),title:updated.title,date,endDate:date,start,end,category:updated.category||"任務",recurrence:"無",note:updated.project,sourceType:"task",sourceId:updated.id,completed:updated.done}])}
               setEditingTaskId(undefined);
               notify("任務已更新");
             }}
