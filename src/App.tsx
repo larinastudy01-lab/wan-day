@@ -885,7 +885,6 @@ function App({ onLogout }: { onLogout: () => void }) {
             ? [...v, item]
             : v.map((x) => (x.id === editId ? item : x)),
         );
-        setEvents(current=>[...current.filter(event=>!(event.sourceType==="work"&&event.sourceId===item.id)),{id:Date.now()+1,title:item.name,date:alignToWeekday(item.startDate,item.weekday),endDate:item.endDate,start:item.start,end:item.end,category:"工作",recurrence:"每週",recurrenceEnd:item.endDate,note:item.location||item.organization,sourceType:"work",sourceId:item.id}]);
         break;
       }
       case "course": {
@@ -1589,6 +1588,10 @@ function App({ onLogout }: { onLogout: () => void }) {
             ]}
             navigate={navigate}
           />
+          <section className="card future-goals">
+            <div className="card-head"><div><span className="kicker">FUTURE GOALS</span><h2>未來目標</h2><p>把想前往的方向先記下來，再逐步拆成行動。</p></div><button className="outline-btn" onClick={()=>setFormKind("goal")}><Plus/>新增未來目標</button></div>
+            <div className="future-goal-grid">{goals.filter(goal=>goal.deadline>=currentDate()).map(goal=><article key={goal.id}><span>{goal.area}・{goal.deadline}</span><strong>{goal.title}</strong><p>{goal.reason}</p><div className="bar"><i style={{width:`${Math.min(100,(goal.current/Math.max(goal.target,1))*100)}%`,background:goal.color}}/></div></article>)}</div>
+          </section>
         </>
       );
     if (active === "學習模式")
@@ -1616,6 +1619,12 @@ function App({ onLogout }: { onLogout: () => void }) {
               navigate("專注");
             }}
             onAddCourse={() => setFormKind("course")}
+            onDeleteCourse={(course) => {
+              if (!window.confirm(`確定刪除課程「${course.name}」？`)) return;
+              setCourses((current) => current.filter((item) => item.id !== course.id));
+              setEvents((current) => current.filter((event) => !(event.sourceType === "course" && event.sourceId === course.id)));
+              notify("課程與對應行程已刪除");
+            }}
             onAddTask={(course, title, date, start, end) => {
               const taskId=Date.now();
               setTasks((current) => [{id:taskId,title,done:false,quadrant:"Q2",estimate:30,project:course.name,category:"學習",energy:"中",status:"待辦",due:date},...current]);
@@ -1639,7 +1648,16 @@ function App({ onLogout }: { onLogout: () => void }) {
           }}
         />
       );
-    if (active === "工作") return <WorkSchedulePage works={works} onAdd={()=>setFormKind("work")} onEdit={(id)=>openEdit("work",id)} onDelete={(work)=>deleteRecord(work,setWorks,"工作")}/>;
+    if (active === "工作") return <WorkSchedulePage works={works} tasks={tasks} events={events} onAdd={()=>setFormKind("work")} onEdit={(id)=>openEdit("work",id)} onDelete={(work)=>{if(!window.confirm(`確定刪除工作身分「${work.name}」？`))return;setWorks(current=>current.filter(item=>item.id!==work.id));setEvents(current=>current.filter(event=>!(event.sourceType==="work"&&event.sourceId===work.id)));notify("工作身分與對應班次已刪除")}} onToggleTask={toggle} onDeleteTask={(task)=>{if(!window.confirm(`確定刪除工作待辦「${task.title}」？`))return;setTasks(current=>current.filter(item=>item.id!==task.id));setEvents(current=>current.filter(event=>!(event.sourceType==="task"&&event.sourceId===task.id)));notify("工作待辦與對應行程已刪除")}} onDeleteShift={(shift)=>{setEvents(current=>current.filter(event=>event.id!==shift.id));notify("工作時間已從行程移除")}} onAddShift={({workId,date,start,end,location})=>{
+      const work=works.find(item=>item.id===workId); if(!work)return;
+      setEvents(current=>[{id:Date.now(),title:`${work.name}・工作時間`,date,endDate:date,start,end,category:"工作",recurrence:"無",note:location||work.organization,sourceType:"work",sourceId:work.id},...current]);
+      notify("工作時間已同步到行程");
+    }} onAddTask={({workId,title,date,start,end})=>{
+      const work=works.find(item=>item.id===workId); if(!work)return; const taskId=Date.now();
+      setTasks(current=>[{id:taskId,title,done:false,quadrant:"Q2",estimate:30,project:work.name,category:"工作",energy:"中",status:"待辦",due:date},...current]);
+      setEvents(current=>[{id:taskId+1,title,date,endDate:date,start,end,category:"工作",recurrence:"無",note:work.name,sourceType:"task",sourceId:taskId},...current]);
+      notify("工作待辦已同步到行程");
+    }}/>;
     if (active === "工作")
       return (
         <>
