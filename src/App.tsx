@@ -834,6 +834,12 @@ function App({ onLogout }: { onLogout: () => void }) {
         );
         break;
       }
+      case "futureGoal": {
+        const futureColors:Record<string,string>={學習:uiColors.study,職涯:uiColors.work,旅行:uiColors.finance,健康:uiColors.health,生活:uiColors.brand,成長:uiColors.accent};
+        const item:Goal={id,title:values.title,area:values.area,role:"future",current:0,target:1,unit:"",deadline:values.deadline,color:futureColors[values.area]||uiColors.brand,reason:values.reason};
+        setGoals(current=>[...current,item]);
+        break;
+      }
       case "project": {
         const old = projects.find((x) => x.id === editId);
         const item: Project = {
@@ -1490,6 +1496,11 @@ function App({ onLogout }: { onLogout: () => void }) {
             onAddProject={() => setFormKind("project")}
             onEditProject={(id) => openEdit("project", id)}
             onDeleteProject={deleteProject}
+            onAddTask={(task,start,end)=>{
+              setTasks(current=>[...current,task]);
+              setEvents(current=>[{id:task.id+1,title:task.title,date:task.due||currentDate(),endDate:task.due||currentDate(),start:/^\d{2}:\d{2}$/.test(start)?start:"09:00",end:/^\d{2}:\d{2}$/.test(end)?end:"10:00",category:"專案",recurrence:"無",note:task.project,sourceType:"task",sourceId:task.id},...current]);
+              notify("專案任務已同步到行程");
+            }}
           />
           <ProjectLifecyclePanel
             projects={projects}
@@ -1589,8 +1600,8 @@ function App({ onLogout }: { onLogout: () => void }) {
             navigate={navigate}
           />
           <section className="card future-goals">
-            <div className="card-head"><div><span className="kicker">FUTURE GOALS</span><h2>未來目標</h2><p>把想前往的方向先記下來，再逐步拆成行動。</p></div><button className="outline-btn" onClick={()=>setFormKind("goal")}><Plus/>新增未來目標</button></div>
-            <div className="future-goal-grid">{goals.filter(goal=>goal.deadline>=currentDate()).map(goal=><article key={goal.id}><span>{goal.area}・{goal.deadline}</span><strong>{goal.title}</strong><p>{goal.reason}</p><div className="bar"><i style={{width:`${Math.min(100,(goal.current/Math.max(goal.target,1))*100)}%`,background:goal.color}}/></div></article>)}</div>
+            <div className="card-head"><div><span className="kicker">FUTURE GOALS</span><h2>未來目標</h2><p>只記錄方向、標籤與期待日期，不需要設定目標數值。</p></div><button className="outline-btn" onClick={()=>setFormKind("futureGoal")}><Plus/>新增未來目標</button></div>
+            <div className="future-goal-grid">{goals.filter(goal=>goal.role==="future").map(goal=><article style={{borderTopColor:goal.color}} key={goal.id}><span style={{background:goal.color}}>{goal.area}</span><time>{goal.deadline}</time><strong>{goal.title}</strong><p>{goal.reason}</p><button className="record-delete" aria-label={`刪除${goal.title}`} onClick={()=>deleteGoal(goal.id)}><Trash2/></button></article>)}</div>
           </section>
         </>
       );
