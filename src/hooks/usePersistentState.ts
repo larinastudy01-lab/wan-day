@@ -5,7 +5,7 @@ import {useStorageScope} from './storageScopeContext'
 
 const LEGACY_OWNER_KEY='growth-local-data-owner-v1'
 function scopedKey(scope:string|null,key:string){return scope?`growth-user:${scope}:${key}`:key}
-function initialValue<T>(scope:string|null,key:string,fallback:T){if(!scope)return readLocal(key,fallback);const target=scopedKey(scope,key);if(localStorage.getItem(target)!==null)return readLocal(target,fallback);const owner=localStorage.getItem(LEGACY_OWNER_KEY);if(!owner)localStorage.setItem(LEGACY_OWNER_KEY,scope);if(!owner||owner===scope){const legacy=readLocal(key,fallback);writeLocal(target,legacy);return legacy}return fallback}
+function initialValue<T>(scope:string|null,key:string,fallback:T){if(!scope)return readLocal(key,fallback);const target=scopedKey(scope,key);if(localStorage.getItem(target)!==null)return readLocal(target,fallback);const owner=localStorage.getItem(LEGACY_OWNER_KEY);const demoKey=scopedKey('local-demo',key);if(owner==='local-demo'&&scope!=='local-demo'&&localStorage.getItem(demoKey)!==null){const demoValue=readLocal(demoKey,fallback);writeLocal(target,demoValue);localStorage.setItem(LEGACY_OWNER_KEY,scope);return demoValue}if(!owner)localStorage.setItem(LEGACY_OWNER_KEY,scope);if(!owner||owner===scope){const legacy=readLocal(key,fallback);writeLocal(target,legacy);return legacy}return fallback}
 
 export function usePersistentState<T>(key:string,fallback:T):[T,Dispatch<SetStateAction<T>>]{
   const scope=useStorageScope()
