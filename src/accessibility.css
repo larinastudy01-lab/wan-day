@@ -1,0 +1,9 @@
+:focus-visible{outline:3px solid var(--color-brand-accent);outline-offset:3px}
+.dialog-description{margin:-12px 0 18px;color:var(--color-text-secondary);font-size:12px}
+.quick-capture-modal .modal-head p{margin:-12px 0 18px;color:var(--color-text-secondary);font-size:12px}
+.capture-title{display:block;color:var(--color-text-secondary);font-size:12px}
+.capture-title input{display:block;margin-top:6px}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
+}

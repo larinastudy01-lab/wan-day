@@ -1,0 +1,17 @@
+{
+  "name":"Personal Growth OS",
+  "short_name":"Growth OS",
+  "description":"你的個人成長作業系統",
+  "lang":"zh-Hant",
+  "start_url":"/",
+  "scope":"/",
+  "display":"standalone",
+  "orientation":"any",
+  "background_color":"#F6F1E7",
+  "theme_color":"#2F7F7A",
+  "categories":["productivity","lifestyle"],
+  "icons":[
+    {"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"},
+    {"src":"/icon-maskable.svg","sizes":"any","type":"image/svg+xml","purpose":"maskable"}
+  ]
+}

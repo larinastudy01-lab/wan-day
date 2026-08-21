@@ -1,0 +1,2 @@
+export type Recurrence='無'|'每天'|'每週'|'每月'
+export function occursOn(eventDate:string,recurrence:Recurrence,targetDate:string){const start=new Date(`${eventDate}T00:00:00`);const target=new Date(`${targetDate}T00:00:00`);if(eventDate===targetDate)return true;if(target<start||recurrence==='無')return false;if(recurrence==='每天')return true;if(recurrence==='每週')return start.getDay()===target.getDay();return start.getDate()===target.getDate()}
