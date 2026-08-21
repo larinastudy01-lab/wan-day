@@ -11,7 +11,7 @@ export function RecordModal({title,subtitle,fields,submitLabel='儲存',onClose,
   const prefix=useId()
   const handleDialogKey=useDialog(onClose)
   const visibleFields=fields.filter(field=>!field.visibleWhen||field.visibleWhen(values))
-  const submit=(event:FormEvent)=>{event.preventDefault();const missing=visibleFields.find(x=>x.required&&!values[x.name]?.trim());if(missing){setError(`請填寫「${missing.label}」`);return}if(values.recurrenceEnd&&values.date&&values.recurrenceEnd<values.date){setError('重複結束日期不能早於開始日期');return}onSubmit(values)}
+  const submit=(event:FormEvent)=>{event.preventDefault();const missing=visibleFields.find(x=>x.required&&!values[x.name]?.trim());if(missing){setError(`請填寫「${missing.label}」`);return}if(values.endDate&&values.date&&values.endDate<values.date){setError('結束日期不能早於開始日期');return}if(values.recurrenceEnd&&values.date&&values.recurrenceEnd<values.date){setError('重複結束日期不能早於開始日期');return}onSubmit(values)}
   const update=(name:string,value:string)=>{setValues(current=>({...current,[name]:value}));setError('')}
   return <div className="modal-back" role="presentation" onMouseDown={onClose}><form className="modal record-modal" role="dialog" aria-modal="true" aria-labelledby={`${prefix}-dialog-title`} aria-describedby={`${prefix}-dialog-subtitle`} onKeyDown={handleDialogKey} onSubmit={submit} onMouseDown={event=>event.stopPropagation()}>
     <div className="modal-head"><div><span className="kicker">RECORD EDITOR</span><h2 id={`${prefix}-dialog-title`}>{title}</h2><p id={`${prefix}-dialog-subtitle`}>{subtitle}</p></div><button type="button" aria-label="關閉表單" onClick={onClose}><X/></button></div>

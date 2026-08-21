@@ -1,0 +1,10 @@
+import {BriefcaseBusiness,CalendarClock,Clock3,PenLine,Trash2} from 'lucide-react'
+import {PageTitle} from '../../components/PageTitle'
+import type {WorkProfile} from '../../domain/types'
+
+const weekday=(value?:number)=>['週日','週一','週二','週三','週四','週五','週六'][value??1]
+
+export function WorkSchedulePage({works,onAdd,onEdit,onDelete}:{works:WorkProfile[];onAdd:()=>void;onEdit:(id:number)=>void;onDelete:(work:WorkProfile)=>void}){
+  const scheduled=works.filter(work=>work.start&&work.end&&work.startDate&&work.endDate)
+  return <><PageTitle name="工作" onAdd={onAdd}/><section className="work-summary"><article className="card work-stat"><Clock3/><div><span>固定工作時段</span><strong>{scheduled.length} 個</strong><small>已同步到行程</small></div></article><article className="card work-stat"><BriefcaseBusiness/><div><span>工作身分</span><strong>{works.length} 個</strong><small>只管理角色與時間</small></div></article><article className="card work-stat"><CalendarClock/><div><span>本週安排</span><strong>{scheduled.reduce((sum,work)=>{const start=Number(work.start?.slice(0,2)||0)*60+Number(work.start?.slice(3)||0);const end=Number(work.end?.slice(0,2)||0)*60+Number(work.end?.slice(3)||0);return sum+Math.max(0,end-start)},0)/60} 小時</strong><small>不含臨時工作</small></div></article></section><section><div className="section-heading"><div><span className="kicker">WORK PROFILES</span><h2>我的工作身分</h2></div></div><div className="work-profiles">{works.map(work=><article className="card work-profile" key={work.id}><header><span>{work.type}</span><em>{work.status}</em></header><h2 className="editable-title">{work.name}<button aria-label={`編輯 ${work.name}`} onClick={()=>onEdit(work.id)}><PenLine/></button><button aria-label={`刪除 ${work.name}`} onClick={()=>onDelete(work)}><Trash2/></button></h2><p>{work.organization}・{work.role}</p><footer className="work-schedule"><CalendarClock/><div><strong>{work.start&&work.end?`${weekday(work.weekday)} ${work.start}–${work.end}`:'尚未設定工作時間'}</strong><span>{work.startDate&&work.endDate?`${work.startDate} 至 ${work.endDate}`:'編輯身分即可加入固定時間'}</span>{work.location&&<span>{work.location}</span>}</div></footer></article>)}</div></section></>
+}

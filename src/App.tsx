@@ -15,6 +15,7 @@ import type {
   BodyLog,
   Budget,
   CalendarEvent,
+  Course,
   Exam,
   ExerciseLog,
   FinanceTransaction,
@@ -44,6 +45,7 @@ import type {
 import {
   initialAccounts,
   initialBody,
+  initialCourses,
   initialBudgets,
   initialEvents,
   initialExams,
@@ -88,6 +90,7 @@ import { ProjectLifecyclePanel } from "./features/projects/ProjectLifecyclePanel
 import { createFocusLog, resolveFocus } from "./features/focus/focusEngine";
 import { LearningPage } from "./features/learning/LearningPage";
 import { TogetherPage } from "./features/social/TogetherPage";
+import { WorkSchedulePage } from "./features/work/WorkSchedulePage";
 import { buildInsights } from "./features/insights/insightEngine";
 import { SmartInsightCard } from "./features/insights/SmartInsightCard";
 import { usePersistentState } from "./hooks/usePersistentState";
@@ -160,6 +163,7 @@ const MetricBarChart = lazy(() =>
   import("./components/Charts").then((m) => ({ default: m.MetricBarChart })),
 );
 const currentDate = () => new Date().toLocaleDateString("en-CA");
+const alignToWeekday = (dateValue:string,weekday:number) => { const date=new Date(`${dateValue}T00:00:00`); date.setDate(date.getDate()+(weekday-date.getDay()+7)%7); return date.toLocaleDateString("en-CA") };
 
 function App({ onLogout }: { onLogout: () => void }) {
   const storageScope = useStorageScope();
@@ -282,13 +286,17 @@ function App({ onLogout }: { onLogout: () => void }) {
     "growth-focus-notifications-v1",
     false,
   );
-  const [studyDailyGoal, setStudyDailyGoal] = usePersistentState(
+  const [studyDailyGoal] = usePersistentState(
     "growth-study-daily-goal-v1",
     120,
   );
   const [events, setEvents] = usePersistentState<CalendarEvent[]>(
     "growth-events-v1",
     initialEvents,
+  );
+  const [courses, setCourses] = usePersistentState<Course[]>(
+    "growth-courses-v1",
+    initialCourses,
   );
   const [taskCategories, setTaskCategories] = usePersistentState<string[]>(
     "growth-task-categories-v1",
@@ -328,6 +336,7 @@ function App({ onLogout }: { onLogout: () => void }) {
     "每週",
   );
   const [formKind, setFormKind] = useState<FormKind>(null);
+  const [examCourseName, setExamCourseName] = useState("");
   const [editId, setEditId] = useState<number>();
   const [editingTaskId, setEditingTaskId] = useState<number>();
   const [undo, setUndo] = useState<{ label: string; run: () => void }>();
@@ -642,6 +651,7 @@ function App({ onLogout }: { onLogout: () => void }) {
       bodyLogs,
       wellnessLogs,
       events,
+      courses,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
@@ -688,6 +698,7 @@ function App({ onLogout }: { onLogout: () => void }) {
         if (Array.isArray(data.wellnessLogs))
           setWellnessLogs(data.wellnessLogs);
         if (Array.isArray(data.events)) setEvents(data.events);
+        if (Array.isArray(data.courses)) setCourses(data.courses);
         notify("資料已成功匯入");
       } catch {
         notify("匯入失敗：檔案格式不正確");
@@ -744,10 +755,10 @@ function App({ onLogout }: { onLogout: () => void }) {
           : `編輯${base.title.replace("新增", "").replace("建立", "")}`,
       submitLabel: editId === undefined ? "儲存" : "更新",
       fields: (formKind === "event"
-        ? [...base.fields, { name: "recurrenceEnd", label: "重複到哪一天", type: "date" as const, required: true, visibleWhen: (formValues: Record<string, string>) => formValues.recurrence !== "無" }]
+        ? [...base.fields, { name: "endDate", label: "結束日期", type: "date" as const, required: true }, { name: "recurrenceEnd", label: "重複到哪一天", type: "date" as const, required: true, visibleWhen: (formValues: Record<string, string>) => formValues.recurrence !== "無" }]
         : base.fields).map((field) => ({
         ...field,
-        defaultValue: values?.[field.name] ?? field.defaultValue,
+        defaultValue: values?.[field.name] ?? (formKind === "exam" && field.name === "name" && examCourseName ? `${examCourseName}考試` : field.defaultValue),
       })),
     };
   };
@@ -797,6 +808,7 @@ function App({ onLogout }: { onLogout: () => void }) {
     };
     actions[formKind]?.();
     setFormKind(null);
+    setExamCourseName("");
     setEditId(undefined);
   };
   const createRecord = (values: Record<string, string>) => {
@@ -861,12 +873,25 @@ function App({ onLogout }: { onLogout: () => void }) {
           rate: num("rate"),
           unit: values.unit,
           status: "進行中" as const,
+          weekday: num("weekday"),
+          start: values.start,
+          end: values.end,
+          startDate: values.startDate,
+          endDate: values.endDate,
+          location: values.location,
         };
         setWorks((v) =>
           editId === undefined
             ? [...v, item]
             : v.map((x) => (x.id === editId ? item : x)),
         );
+        setEvents(current=>[...current.filter(event=>!(event.sourceType==="work"&&event.sourceId===item.id)),{id:Date.now()+1,title:item.name,date:alignToWeekday(item.startDate,item.weekday),endDate:item.endDate,start:item.start,end:item.end,category:"工作",recurrence:"每週",recurrenceEnd:item.endDate,note:item.location||item.organization,sourceType:"work",sourceId:item.id}]);
+        break;
+      }
+      case "course": {
+        const course:Course={id:editId??id,name:values.name,instructor:values.instructor,location:values.location,weekday:num("weekday"),start:values.start,end:values.end,startDate:values.startDate,endDate:values.endDate};
+        setCourses(current=>editId===undefined?[...current,course]:current.map(item=>item.id===editId?course:item));
+        setEvents(current=>[...current.filter(event=>!(event.sourceType==="course"&&event.sourceId===course.id)),{id:Date.now()+2,title:course.name,date:alignToWeekday(course.startDate,course.weekday),endDate:course.endDate,start:course.start,end:course.end,category:"課程",recurrence:"每週",recurrenceEnd:course.endDate,note:[course.instructor,course.location].filter(Boolean).join("・"),sourceType:"course",sourceId:course.id}]);
         break;
       }
       case "exam": {
@@ -886,6 +911,7 @@ function App({ onLogout }: { onLogout: () => void }) {
             ? [...v, item]
             : v.map((x) => (x.id === editId ? item : x)),
         );
+        setEvents(current=>[...current.filter(event=>!(event.sourceType==="exam"&&event.sourceId===item.id)),{id:Date.now()+3,title:item.name,date:item.date,endDate:item.date,start:values.start,end:values.end,category:"考試",recurrence:"無",note:item.type,sourceType:"exam",sourceId:item.id}]);
         break;
       }
       case "transaction": {
@@ -899,6 +925,7 @@ function App({ onLogout }: { onLogout: () => void }) {
             category: values.category,
             amount,
             date: values.date,
+            endDate: values.endDate,
             note: values.note,
           },
           ...v,
@@ -1577,10 +1604,10 @@ function App({ onLogout }: { onLogout: () => void }) {
               />
             ))}
           <LearningPage
+            courses={courses}
             exams={exams}
             studyLogs={studyLogs}
             dailyGoal={studyDailyGoal}
-            setDailyGoal={setStudyDailyGoal}
             onStartFocus={(examId, subject, minutes) => {
               setFocusKind("learning");
               setFocusEntityId(examId);
@@ -1588,11 +1615,14 @@ function App({ onLogout }: { onLogout: () => void }) {
               setPreset(minutes);
               navigate("專注");
             }}
-            onAddTask={(course, title) => {
-              setTasks((current) => [{id:Date.now(),title,done:false,quadrant:"Q2",estimate:30,project:course,category:"學習",energy:"中",status:"待辦"},...current]);
-              notify(`已加入「${course}」任務`);
+            onAddCourse={() => setFormKind("course")}
+            onAddTask={(course, title, date, start, end) => {
+              const taskId=Date.now();
+              setTasks((current) => [{id:taskId,title,done:false,quadrant:"Q2",estimate:30,project:course.name,category:"學習",energy:"中",status:"待辦",due:date},...current]);
+              setEvents(current=>[{id:taskId+1,title,date,endDate:date,start,end,category:"課程",recurrence:"無",note:course.name,sourceType:"task",sourceId:taskId},...current]);
+              notify(`已加入「${course.name}」並排進行程`);
             }}
-            onAddExam={() => setFormKind("exam")}
+            onAddExam={(course) => {setExamCourseName(course.name);setFormKind("exam")}}
             onOpenExams={() => navigate("考試")}
           />
         </>
@@ -1609,6 +1639,7 @@ function App({ onLogout }: { onLogout: () => void }) {
           }}
         />
       );
+    if (active === "工作") return <WorkSchedulePage works={works} onAdd={()=>setFormKind("work")} onEdit={(id)=>openEdit("work",id)} onDelete={(work)=>deleteRecord(work,setWorks,"工作")}/>;
     if (active === "工作")
       return (
         <>

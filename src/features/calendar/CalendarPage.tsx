@@ -31,7 +31,7 @@ export function CalendarPage({tasks,setTasks,events,setEvents,onUndo,projects=[]
     const gridStart=startOfWeek(first)
     return Array.from({length:42},(_,index)=>new Date(gridStart.getTime()+index*dayMs))
   })()
-  const eventsOn=(date:Date)=>events.filter(event=>occursOn(event.date,event.recurrence,isoDate(date),event.recurrenceEnd))
+  const eventsOn=(date:Date)=>events.filter(event=>occursOn(event.date,event.recurrence,isoDate(date),event.recurrenceEnd,event.endDate))
   const tasksOn=(date:Date)=>tasks.filter(task=>task.due===isoDate(date)||(task.due==='今天'&&sameDay(date,today)))
   const shift=(direction:number)=>setAnchor(current=>{const next=new Date(current);if(view==='月')next.setMonth(next.getMonth()+direction);else next.setDate(next.getDate()+direction*(view==='週'?7:1));return next})
   const drop=(date:Date)=>{if(!dragId)return;setTasks(current=>current.map(task=>task.id===dragId?{...task,due:isoDate(date)}:task));setDragId(undefined)}
