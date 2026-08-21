@@ -8,7 +8,7 @@ const {auth}=vi.hoisted(()=>({auth:{
   signOut:vi.fn(),
 }}))
 
-vi.mock('../../lib/supabase',()=>({supabase:{auth}}))
+vi.mock('../../lib/supabase',()=>({supabase:{auth},supabaseConfigured:true}))
 
 import {getSession,loginUser,logoutUser,registerUser} from './authStorage'
 
