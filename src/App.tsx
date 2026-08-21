@@ -85,6 +85,7 @@ import {
 } from "./features/onboarding/OnboardingPage";
 import { QuickCaptureModal } from "./features/planning/QuickCaptureModal";
 import type { CaptureSuggestion } from "./features/planning/captureEngine";
+import { suggestedFocusMinutes } from "./features/planning/adaptiveFlow";
 import { ProjectPage } from "./features/projects/ProjectPage";
 import { ProjectLifecyclePanel } from "./features/projects/ProjectLifecyclePanel";
 import { createFocusLog, resolveFocus } from "./features/focus/focusEngine";
@@ -1342,7 +1343,12 @@ function App({ onLogout }: { onLogout: () => void }) {
             onAdd={() => setQuick(true)}
             onOpenTasks={() => navigate("計畫")}
             onOpenCapacity={() => navigate("行程")}
-            onFocus={() => navigate("專注")}
+            onFocus={(taskId,minutes) => {
+              setFocusKind("task");
+              setFocusEntityId(taskId);
+              setPreset(minutes);
+              navigate("專注");
+            }}
           />
           {smartInsights
             .filter((item) => item.placement === "today")
@@ -2307,6 +2313,7 @@ function App({ onLogout }: { onLogout: () => void }) {
         exams,
         works,
       });
+      const recommendedFocus=suggestedFocusMinutes(focusKind==="task"?tasks.find(task=>task.id===focusEntityId):undefined,health);
       return (
         <>
           <PageTitle name={active} onAdd={() => setPreset(25)} />
@@ -2356,10 +2363,10 @@ function App({ onLogout }: { onLogout: () => void }) {
               />
               <div className="focus-presets">
                 {[
-                  [25, "經典"],
-                  [50, "學習"],
-                  [90, "深度工作"],
-                  [15, "快速專注"],
+                  [20, recommendedFocus===20?"目前推薦":"短段"],
+                  [40, recommendedFocus===40?"目前推薦":"穩定推進"],
+                  [60, recommendedFocus===60?"目前推薦":"深度投入"],
+                  [90, "長段專注"],
                 ].map(([m, n]) => (
                   <button
                     disabled={focusRunning}
@@ -2571,7 +2578,7 @@ function App({ onLogout }: { onLogout: () => void }) {
                     <button aria-label="刪除習慣" onClick={() => deleteRecord(h, setHabits, "習慣")}><Trash2 /></button>
                   </strong>
                   <span>
-                    {h.category}・連續 {h.streak} 天
+                    {h.category}・近 7 天完成 {h.days.filter(Boolean).length} 天（{Math.round(h.days.filter(Boolean).length / 7 * 100)}%）
                   </span>
                 </div>
                 {h.days.map((done, i) => (
@@ -2662,6 +2669,7 @@ function App({ onLogout }: { onLogout: () => void }) {
                   </button>
                 </h2>
                 <p>{n.content}</p>
+                {notes.some(other=>other.id!==n.id&&other.tag===n.tag)&&<div className="note-related"><span>可能相關</span>{notes.filter(other=>other.id!==n.id&&other.tag===n.tag).slice(0,2).map(other=><button onClick={()=>openEdit("note",other.id)} key={other.id}>{other.title}</button>)}</div>}
                 <small>更新於 {n.updated}</small>
               </article>
             ))}
@@ -3301,31 +3309,22 @@ function ReviewPage({
 }) {
   const lists = {
     每日: [
-      "完成今天的重要任務",
-      "處理新進收集匣",
-      "記錄今天的亮點",
-      "寫下遇到的問題",
-      "選出明日 Top 3",
+      "收好今天新增的事情",
+      "記下一個值得保留的亮點",
+      "選出明天最值得推進的三件事",
     ],
     每週: [
-      "清空收集匣",
-      "檢查逾期任務",
-      "追蹤 Waiting For",
-      "檢查所有進行中專案",
-      "檢查 SMART Goals",
-      "保護 Q2 時間",
-      "確認下週容量",
-      "選出 Weekly Big 3",
+      "整理這週還沒歸位的事情",
+      "看看哪些承諾需要調整日期",
+      "每個進行中專案選一個下一步",
+      "確認下週真正可用的時間",
+      "選出下週三個重點",
     ],
     每月: [
-      "回顧 SMART Goals",
-      "檢查專案進度",
-      "分析工作負載",
-      "檢查考試進度",
-      "檢視現金流與預算",
-      "回顧投資決策",
-      "檢查健康趨勢",
-      "選出下月三大重點",
+      "確認未來方向是否仍然重要",
+      "保留有進展的專案，暫停其餘項目",
+      "看看工作、學習、健康是否失衡",
+      "選出下個月三個重點",
     ],
   };
   const items = lists[mode];
